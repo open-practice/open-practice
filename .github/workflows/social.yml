@@ -42,6 +42,7 @@ jobs:
           OP_MASTODON_INSTANCE: ${{ secrets.OP_MASTODON_INSTANCE }}
           OP_MASTODON_TOKEN: ${{ secrets.OP_MASTODON_TOKEN }}
           OP_NOSTR_NSEC: ${{ secrets.OP_NOSTR_NSEC }}
+          OP_CARD_URL: ${{ secrets.OP_CARD_URL }}
           OP_DISCORD_WEBHOOK: ${{ secrets.OP_DISCORD_WEBHOOK }}
           OP_BUFFER_TOKEN: ${{ secrets.OP_BUFFER_TOKEN }}
           OP_PINTEREST_BOARD: ${{ secrets.OP_PINTEREST_BOARD }}

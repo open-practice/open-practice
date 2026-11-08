@@ -53,28 +53,37 @@ class ArmedTest(unittest.TestCase):
         self.assertIn("skip", why)
 
     def test_dry_run_reports_without_calling_out(self):
-        with mock.patch.object(social, "post_bsky", side_effect=AssertionError("must not post")):
+        import postimage
+        card = postimage.Img(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, url="https://a.test/c.png")
+        with mock.patch.object(social, "post_bsky", side_effect=AssertionError("must not post")), \
+             mock.patch.object(social, "_image", return_value=card):
             res = social.post("hello", link="https://example.com", rails=["bsky"], dry=True)
         self.assertTrue(res["bsky"][0])
 
     def test_link_is_appended_once(self):
         seen = {}
-        def fake(text, link="", tags=None):
+        def fake(text, link="", tags=None, image=None):
             seen["text"] = text
             return True, "ok"
-        with mock.patch.object(social, "post_bsky", fake):
+        import postimage
+        card = postimage.Img(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, url="https://a.test/c.png")
+        with mock.patch.object(social, "post_bsky", fake), \
+             mock.patch.object(social, "_image", return_value=card):
             social.post("body", link="https://a.test/x", rails=["bsky"])
             self.assertTrue(seen["text"].endswith("https://a.test/x"))
             social.post("body https://a.test/x", link="https://a.test/x", rails=["bsky"])
             self.assertEqual(seen["text"].count("https://a.test/x"), 1)
 
     def test_one_failing_rail_does_not_stop_the_others(self):
-        def boom(text):
+        def boom(text, **kw):
             raise RuntimeError("rail on fire")
-        def fine(text):
+        def fine(text, **kw):
             return True, "ok"
+        import postimage
+        card = postimage.Img(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, url="https://a.test/c.png")
         with mock.patch.object(social, "post_nostr", boom), \
-             mock.patch.object(social, "post_mastodon", fine):
+             mock.patch.object(social, "post_mastodon", fine), \
+             mock.patch.object(social, "_image", return_value=card):
             res = social.post("body", rails=["nostr", "mastodon"])
         self.assertFalse(res["nostr"][0])
         self.assertTrue(res["mastodon"][0])
@@ -103,7 +112,7 @@ class CryptoTest(unittest.TestCase):
                          __import__("urllib.parse", fromlist=["quote"]).quote(want, safe="~-._"))
 
     def test_nsec_bech32_decodes_to_32_bytes(self):
-        sk = social._bech32_decode("nsec18qrcy3x088mm57g7dtt8calvm2kzx4kn6d93g7wk93uqheswg7ashc6l2r")
+        sk = social._bech32_decode("nsec1zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs4rm7hz")
         self.assertEqual(len(sk), 32)
 
     def test_hex_nsec_is_accepted_too(self):
@@ -316,3 +325,11 @@ class WorkflowWiring(unittest.TestCase):
         wf = (root / ".github" / "workflows" / "social.yml").read_text()
         missing = sorted(u for u in used if u not in wf)
         self.assertEqual(missing, [], f"secrets read by social.py but missing from social.yml: {missing}")
+
+    def test_every_rail_refuses(self):
+        """The rule from 2026-11-08: no image, no post."""
+        import postimage
+        with mock.patch.object(social, "_image", side_effect=postimage.NoImage("card 404")):
+            res = social.post("body", rails=["bsky", "mastodon"])
+        self.assertFalse(res["bsky"][0])
+        self.assertIn("no image", res["bsky"][1])

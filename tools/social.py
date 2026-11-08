@@ -36,11 +36,57 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import re
+
+try:
+    import postimage
+except ImportError:  # pragma: no cover - the module sits next to this file in the repo
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import postimage
 
 UA = "Mozilla/5.0 (compatible; OpenPracticeDesk/1.0; +https://open-practice.open-practice.workers.dev)"
 SITE = os.environ.get("OP_SITE_URL", "https://open-practice.open-practice.workers.dev").rstrip("/")
 CARD = f"{SITE}/brand/og-1200x630.png"
+# the second hosted card: if the og card 404s, this is still a url a platform can fetch
+CARD_FALLBACK = f"{SITE}/brand/github-social-1280x640.png"
 TIMEOUT = 30
+# ----------------------------------------------------------------------------- the image branch
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# the fallback sits beside the rail, or one level up if the rail lives in tools/
+FALLBACK_CARD = next((p for p in (os.path.join(_HERE, "assets", "fallback-card.png"),
+                                 os.path.join(os.path.dirname(_HERE), "assets", "fallback-card.png"))
+                      if os.path.exists(p)), os.path.join(_HERE, "assets", "fallback-card.png"))
+# a per-post image can be named in the text itself: [[image:slug]] or [[image:https://…]]
+_IMAGE_HINT = re.compile(r"\[\[image:([^\]]+)\]\]")
+
+
+def _image(text: str, link: str = "", override: str = "") -> "postimage.Img":
+    """Resolve the image for one post: an explicit one, a hint in the text, or the site card.
+
+    Always ends with the bundled fallback, so a card 404 cannot silently produce a text-only post.
+    A hint that is not a URL is resolved against the site's own asset folder.
+    """
+    alt = " ".join(text.split())[:280]
+    want = (override or os.environ.get("OP_CARD_URL") or "").strip()
+    hint = _IMAGE_HINT.search(text or "")
+    if not want and hint:
+        want = hint.group(1).strip()
+        if not want.startswith(("http://", "https://")):
+            want = SITE + "/brand/" + want
+    url = want or CARD
+    return postimage.resolve_chain([url, CARD_FALLBACK], alt, FALLBACK_CARD)
+
+
+def _post_raw(url: str, data: bytes, headers: dict) -> dict:
+    """Raw body POST, for uploadBlob: the JSON helper would re-encode the image as a string."""
+    st, body = _req(url, data, headers, "POST")
+    if st != 200:
+        raise RuntimeError(f"{url} → {st} {str(body)[:160]}")
+    return body if isinstance(body, dict) else {}
+
+
+
 
 
 # ----------------------------------------------------------------------------- tiny http helpers
@@ -79,7 +125,8 @@ def env(*names: str) -> list[str]:
 
 
 # ----------------------------------------------------------------------------- bluesky
-def post_bsky(text: str, link: str = "", tags: list[str] | None = None) -> tuple[bool, str]:
+def post_bsky(text: str, link: str = "", tags: list[str] | None = None,
+              image: "postimage.Img | None" = None) -> tuple[bool, str]:
     ident, pw = env("OP_BSKY_ID", "OP_BSKY_PASS")
     if not (ident and pw):
         return False, "skip: OP_BSKY_ID/OP_BSKY_PASS not set"
@@ -88,19 +135,20 @@ def post_bsky(text: str, link: str = "", tags: list[str] | None = None) -> tuple
     if st != 200 or not isinstance(sess, dict) or "accessJwt" not in sess:
         return False, f"login failed: {st} {str(sess)[:120]}"
     auth = {"Authorization": f"Bearer {sess['accessJwt']}"}
-    record: dict = {
-        "text": text,
-        "createdAt": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()),
-        "langs": ["en"],
-        "facets": _facets(text),
-    }
-    if tags:
-        record["tags"] = [t.replace("#", "")[:64] for t in tags][:8]
-    if link:
-        record["embed"] = {"$type": "app.bsky.embed.external", "external": {
-            "uri": link, "title": "Open Practice — free practical AI learning",
-            "description": "Six build paths, 86 guided activities, 39 free tools. Independent, non-degree, non-accredited."}}
-        record["facets"] = _facets(text, link)
+    if image is None:
+        try:
+            image = _image(text, link)
+        except postimage.NoImage as e:
+            return False, f"no image, not posting: {e}"
+    try:
+        blob = postimage.bluesky_upload(
+            image, auth,
+            poster=lambda url, data, headers: _post_raw(url, data, headers))
+    except (postimage.NoImage, RuntimeError) as e:
+        return False, f"image upload failed, not posting: {e}"
+    record = postimage.bluesky_record(
+        text, _facets(text, link or ""), image, blob,
+        time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()), tags=tags)
     st, body = _json_post("https://bsky.social/xrpc/com.atproto.repo.createRecord",
                           {"repo": sess["did"], "collection": "app.bsky.feed.post", "record": record}, auth)
     if st != 200:
@@ -125,14 +173,38 @@ def _facets(text: str, link: str = "") -> list[dict]:
 
 
 # ----------------------------------------------------------------------------- mastodon
-def post_mastodon(text: str) -> tuple[bool, str]:
+def post_mastodon(text: str, image: "postimage.Img | None" = None) -> tuple[bool, str]:
     inst, tok = env("OP_MASTODON_INSTANCE", "OP_MASTODON_TOKEN")
     if not (inst and tok):
         return False, "skip: OP_MASTODON_INSTANCE/OP_MASTODON_TOKEN not set"
     host = inst.replace("https://", "").strip("/")
-    st, body = _req(f"https://{host}/api/v1/statuses",
-                    urllib.parse.urlencode({"status": text}).encode(),
-                    {"Authorization": f"Bearer {tok}", "Content-Type": "application/x-www-form-urlencoded"}, "POST")
+    auth = {"Authorization": f"Bearer {tok}"}
+    if image is None:
+        try:
+            image = _image(text, "")
+        except postimage.NoImage as e:
+            return False, f"no image, not posting: {e}"
+    # media first: a status that names a media id that does not exist is rejected outright
+    media_id = ""
+    try:
+        body, ctype = postimage.mastodon_media_body(image)
+        st, media = _req(f"https://{host}/api/v2/media", body,
+                         {**auth, "Content-Type": ctype}, "POST")
+        if st in (200, 201, 202) and isinstance(media, dict) and media.get("id"):
+            media_id = str(media["id"])
+            if st == 202:                                   # accepted, still processing
+                for _ in range(10):
+                    time.sleep(1.5)
+                    st2, m2 = _req(f"https://{host}/api/v1/media/{media_id}", headers=auth)
+                    if st2 == 200:
+                        break
+        else:
+            return False, f"media upload {st}, not posting: {str(media)[:120]}"
+    except postimage.NoImage as e:
+        return False, f"no image, not posting: {e}"
+    fields = postimage.mastodon_status_fields(text, media_id)
+    st, body = _req(f"https://{host}/api/v1/statuses", urllib.parse.urlencode(fields).encode(),
+                    {**auth, "Content-Type": "application/x-www-form-urlencoded"}, "POST")
     if st not in (200, 201):
         return False, f"statuses {st}: {str(body)[:150]}"
     return True, (body or {}).get("url", "posted")
@@ -162,7 +234,8 @@ def _sk() -> bytes:
     return bytes.fromhex(raw)
 
 
-def post_nostr(text: str, relays: list[str] | None = None) -> tuple[bool, str]:
+def post_nostr(text: str, relays: list[str] | None = None,
+               image: "postimage.Img | None" = None) -> tuple[bool, str]:
     sk = _sk()
     if not sk:
         return False, "skip: OP_NOSTR_NSEC not set"
@@ -170,13 +243,23 @@ def post_nostr(text: str, relays: list[str] | None = None) -> tuple[bool, str]:
         import coincurve
     except ImportError:
         return False, "skip: coincurve not installed"
+    if image is None:
+        try:
+            image = _image(text, "")
+        except postimage.NoImage as e:
+            return False, f"no image, not posting: {e}"
+    try:
+        tags = [postimage.nostr_imeta(image)]
+        content = postimage.nostr_content(text, image)
+    except postimage.NoImage as e:
+        return False, f"no image url, not posting: {e}"
     relays = relays or [r.strip() for r in (os.environ.get("OP_NOSTR_RELAYS") or
                         # measured 2026-11-08: nos.lol, relay.nostr.band and nostr.mom time out from
-                        # here; these three answer OK in under two seconds
+                        # here; these answer in under two seconds
                         "wss://relay.damus.io,wss://relay.primal.net,wss://relay.nostr.net").split(",") if r.strip()]
     pk = coincurve.PrivateKey(sk).public_key.format(compressed=True)[1:].hex()
     ev = {"pubkey": pk, "created_at": int(time.time()), "kind": 1,
-          "tags": [], "content": text}
+          "tags": tags, "content": content}
     ser = json.dumps([0, ev["pubkey"], ev["created_at"], ev["kind"], ev["tags"], ev["content"]],
                      separators=(",", ":"), ensure_ascii=False)
     eid = hashlib.sha256(ser.encode()).hexdigest()
@@ -246,13 +329,17 @@ def _publish_nostr_async(ev: dict, relays: list[str]) -> bool:
 
 
 # ----------------------------------------------------------------------------- discord
-def post_discord(text: str) -> tuple[bool, str]:
+def post_discord(text: str, image: "postimage.Img | None" = None) -> tuple[bool, str]:
     (wh,) = env("OP_DISCORD_WEBHOOK")
     if not wh:
         return False, "skip: OP_DISCORD_WEBHOOK not set"
+    if image is None:
+        try:
+            image = _image(text, "")
+        except postimage.NoImage as e:
+            return False, f"no image, not posting: {e}"
     st, body = _json_post(wh + ("&" if "?" in wh else "?") + "wait=true",
-                          {"content": text[:1900], "username": "Open Practice",
-                           "allowed_mentions": {"parse": []}})
+                          postimage.discord_payload(text, image, username="Open Practice"))
     if st not in (200, 204):
         return False, f"webhook {st}: {str(body)[:150]}"
     return True, (body or {}).get("id", "posted") if isinstance(body, dict) else "posted"
@@ -301,18 +388,24 @@ def _tumblr_title(text: str) -> str:
     return cut.rstrip(".,;:—- ") or "Open Practice"
 
 
-def post_tumblr(text: str, tags: list[str] | None = None) -> tuple[bool, str]:
+def post_tumblr(text: str, tags: list[str] | None = None,
+                image: "postimage.Img | None" = None) -> tuple[bool, str]:
     ck, cs, tok, tsec, blog = env("OP_TUMBLR_CK", "OP_TUMBLR_CS", "OP_TUMBLR_TOKEN",
                                   "OP_TUMBLR_TOKEN_SECRET", "OP_TUMBLR_BLOG")
     if not all([ck, cs, tok, tsec, blog]):
         return False, "skip: tumblr needs the OAuth exchange first (see tumblr_connect.py)"
+    if image is None:
+        try:
+            image = _image(text, "")
+        except postimage.NoImage as e:
+            return False, f"no image, not posting: {e}"
     url = f"https://api.tumblr.com/v2/blog/{blog}/post"      # singular: the form-encoded route
-    body = {"type": "text", "format": "markdown", "title": _tumblr_title(text),
-            "body": text[:3000]}
+    fields = {"type": "text", "format": "markdown", "title": _tumblr_title(text)}
+    fields.update(postimage.tumblr_fields(text, image))
     if tags:
-        body["tags"] = ",".join(t.replace("#", "")[:40] for t in tags[:5])
-    st, resp = _req(url, urllib.parse.urlencode(body).encode(),
-                    {"Authorization": _oauth1("POST", url, body, ck, cs, tok, tsec),
+        fields["tags"] = ",".join(t.replace("#", "")[:40] for t in tags[:5])
+    st, resp = _req(url, urllib.parse.urlencode(fields).encode(),
+                    {"Authorization": _oauth1("POST", url, fields, ck, cs, tok, tsec),
                      "Content-Type": "application/x-www-form-urlencoded"}, "POST")
     if st not in (200, 201):
         return False, f"post {st}: {str(resp)[:150]}"
@@ -423,28 +516,57 @@ def armed() -> list[str]:
 
 
 def post(text: str, link: str = "", tags: list[str] | None = None,
-         rails: list[str] | None = None, dry: bool = False) -> dict:
+         rails: list[str] | None = None, dry: bool = False,
+         image: str = "", allow_text_only: bool = False) -> dict:
+    """Post everywhere, with an image on every rail.
+
+    `image` may be a URL or a local path; empty means "use the site card, then the bundled fallback".
+    If neither resolves, every rail fails unless `allow_text_only` is set — the rule is that a post
+    carries an image, so a missing image is an outage, not a style choice.
+    """
     tags = tags or []
     # the link belongs in the text on every rail: a post without it is a dead end
     full = text if not link or link in text else f"{text}\n\n{link}"
     want = rails or armed()
     results: dict[str, tuple[bool, str]] = {}
+
+    card = None
+    why = ""
+    try:
+        card = _image(full, link, override=image)
+    except postimage.NoImage as e:
+        why = str(e)
+
+    if card is None and not allow_text_only:
+        for name in want:
+            results[name] = (False, f"not posted: no image ({why})")
+        return results
+
     for name in want:
         fn = globals().get(RAILS.get(name, ""))
         if not fn:
             results[name] = (False, "unknown rail")
             continue
         if dry:
-            results[name] = (True, "dry run")
+            results[name] = (True, f"dry run" + (f" with {card}" if card else " WITHOUT AN IMAGE"))
             continue
         try:
             if name == "bsky":
-                results[name] = post_bsky(full, link=link, tags=tags)
+                results[name] = post_bsky(full, link=link, tags=tags, image=card)
+            elif name == "mastodon":
+                results[name] = post_mastodon(full, image=card)
+            elif name == "nostr":
+                results[name] = post_nostr(full, image=card)
+            elif name == "discord":
+                results[name] = post_discord(full, image=card)
             elif name == "tumblr":
-                results[name] = post_tumblr(full, tags=tags)
+                results[name] = post_tumblr(full, tags=tags, image=card)
             elif name == "pinterest":
-                # a pin without an image is a broken card, so this rail always carries one
-                results[name] = post_buffer(full, link=link or SITE, image=f"{SITE}/brand/card-activities.png",
+                # a pin has its own tall-format art; an explicit image or a [[image:]] hint wins,
+                # otherwise the pin keeps the brand's pin card exactly as before
+                explicit = bool(image or _IMAGE_HINT.search(full or ""))
+                results[name] = post_buffer(full, link=link or SITE,
+                                            image=(card.url if explicit else f"{SITE}/brand/card-activities.png"),
                                             title=text.split("\n")[0][:100])
             else:
                 results[name] = fn(full)
@@ -492,6 +614,12 @@ def verify() -> dict:
     if env("OP_BUFFER_TOKEN")[0]:
         chans = buffer_channels()
         out["pinterest"] = ("channel " + ", ".join(f"{c['service']}/{c['name']}" for c in chans)) if chans else "FAIL no channels"
+    # the card is part of the credential now: a dead card URL means the rail cannot post
+    try:
+        img = _image("", "")
+        out["image"] = f"{img.mime} {img.dim} {img.size}B"
+    except postimage.NoImage as e:
+        out["image"] = f"FAIL {e}"
     return out
 
 
@@ -503,6 +631,9 @@ def main() -> int:
     ap.add_argument("--tags", default="")
     ap.add_argument("--rails", default="")
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--image", default="", help="image url or path for this post")
+    ap.add_argument("--allow-text-only", action="store_true",
+                    help="post without an image (breaks the rule; for a broken card only)")
     a = ap.parse_args()
 
     if a.cmd == "armed":
