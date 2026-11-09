@@ -1,0 +1,4 @@
+# Historical, and now harmless: the Mechanism Audit signing key was committed here before the
+# scanner existed. It was rotated on 2026-11-09, so the old value opens nothing. Pinned by
+# fingerprint so the nostr rule still fires on any new occurrence anywhere else in the tree.
+9951a20afd5c7781c5f59e0c325325c745205039:tools/tests/test_social.py:nostr-nsec:106

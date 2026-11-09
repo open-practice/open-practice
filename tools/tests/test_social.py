@@ -103,7 +103,7 @@ class CryptoTest(unittest.TestCase):
                          __import__("urllib.parse", fromlist=["quote"]).quote(want, safe="~-._"))
 
     def test_nsec_bech32_decodes_to_32_bytes(self):
-        sk = social._bech32_decode("nsec18qrcy3x088mm57g7dtt8calvm2kzx4kn6d93g7wk93uqheswg7ashc6l2r")
+        sk = social._bech32_decode("nsec1yg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3qxh9tww")
         self.assertEqual(len(sk), 32)
 
     def test_hex_nsec_is_accepted_too(self):

@@ -1,0 +1,49 @@
+# Repo-level secret scanning: every push, every pull request, plus a weekly pass over all history.
+# Config for ./gitleaks in CI (see .github/workflows/secret-scan.yml).
+#
+# The allowlist is deliberately narrow. "Path is a test" is not an exemption: a live key committed
+# inside a test is how the AttestOS and Mechanism Audit signing keys left the building, and a blanket
+# allowlist for tests would have kept quiet about exactly that. Only obviously synthetic values pass.
+
+title = "jacaranda"
+[extend]
+useDefault = true
+
+[[rules]]
+  id = "whop-api-key"
+  description = "Whop API key — full read of products, plans, memberships and payments"
+  regex = '''apik_[A-Za-z0-9_\-]{20,}'''
+  tags = ["key", "whop", "money"]
+
+[[rules]]
+  id = "nostr-nsec"
+  description = "Nostr private key: whoever holds it can sign as that identity forever"
+  regex = '''nsec1[a-z0-9]{50,}'''
+  tags = ["key", "nostr"]
+
+[[rules]]
+  id = "cloudflare-token"
+  description = "Cloudflare API token"
+  regex = '''(?i)(cf_api_token|CLOUDFLARE_API_TOKEN)\s*[:=]\s*["']?[A-Za-z0-9_\-]{30,}'''
+  tags = ["key", "cloudflare"]
+
+[[allowlists]]
+  description = "synthetic test vectors — fixed values with no account behind them"
+  regexes = [
+    # 0x11…11 and 0x22…22 as nsec, used by the press test suites
+    '''nsec1zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygs4rm7hz''',
+    '''nsec1yg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3qxh9tww''',
+    # the example OAuth credentials printed in Twitter's own API documentation
+    '''xvz1evFS4wEEPTGEFPHBog''',
+    '''kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw''',
+    '''370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb''',
+    '''LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE''',
+    # a hex placeholder used as a render seed in card tests
+    '''c0123456789abcdef''',
+  ]
+
+[[allowlists]]
+  description = "placeholder secrets written as obvious dummies"
+  regexes = [
+    '''(?i)(change-me|placeholder|redacted|example|dummy|fake|xxx+|<[a-z_]+>)''',
+  ]
