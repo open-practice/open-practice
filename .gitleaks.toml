@@ -40,6 +40,19 @@ useDefault = true
     '''LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE''',
     # a hex placeholder used as a render seed in card tests
     '''c0123456789abcdef''',
+    # IndexNow key: published at /<key>.txt on purpose, that is how the protocol proves the domain
+    '''5a7541fb26984a8bca8973a4024d8233''',
+    # fixtures: a dummy password, two OAuth values printed in Twitter's API docs, and 'isDisconnected'
+    # (gitleaks' linkedin rule reads the word inside a JSON fixture as a client id)
+    '''owner-pass-123''',
+    '''kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS''',
+    '''nnch734d00sl2jdk''',
+    '''isDisconnected''',
+    # Rotated on 2026-11-09. These opened the AttestOS and Mechanism Audit Nostr identities until
+    # they were replaced; the values are dead, so they are allowlisted by value rather than by
+    # fingerprint — stable across commits, and only ever covers the old key, not a new one.
+    '''nsec1t4kqrgf9w6r0vfset72d0p44zjhry5fwjmshlhpmafmhm37pvmrsspxmed''',
+    '''nsec18qrcy3x088mm57g7dtt8calvm2kzx4kn6d93g7wk93uqheswg7ashc6l2r''',
   ]
 
 [[allowlists]]
