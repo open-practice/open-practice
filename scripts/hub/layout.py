@@ -4,7 +4,7 @@ from pathlib import Path
 
 R = Path(__file__).resolve().parents[2]
 P = R / 'apps/web/public'
-BASE = 'https://open-practice.zlnew.workers.dev'
+BASE = 'https://open-practice.open-practice.workers.dev'
 SITE = 'Open Practice'
 UPDATED = '2026-10-29'
 OG_DEFAULT = '/brand/og-card.png'

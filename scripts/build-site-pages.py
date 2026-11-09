@@ -4,7 +4,7 @@ from pathlib import Path
 import html,json,re,sys
 sys.path.insert(0,str(Path(__file__).resolve().parent/'hub'))
 import social
-R=Path(__file__).resolve().parent.parent;P=R/'apps/web/public';BASE='https://open-practice.zlnew.workers.dev';e=lambda s:html.escape(str(s),quote=True)
+R=Path(__file__).resolve().parent.parent;P=R/'apps/web/public';BASE='https://open-practice.open-practice.workers.dev';e=lambda s:html.escape(str(s),quote=True)
 pages=json.loads((R/'curriculum/site-pages.json').read_text());template=(P/'library.html').read_text();head=template.split('<main>')[0];footer='<footer>'+template.split('<footer>',1)[1].split('</footer>',1)[0]+'</footer>'
 def page_art(page):
  # 0.11.6: an info page with its own illustration (apps/web/public/brand/pages/<slug>.webp, made by

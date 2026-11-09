@@ -2,7 +2,7 @@
 """Build indexable guides, starter challenge and facilitator assets. No network or AI calls."""
 from pathlib import Path
 import html,json,zipfile,io
-R=Path(__file__).resolve().parent.parent;P=R/'apps/web/public';BASE='https://open-practice.zlnew.workers.dev';E=lambda x:html.escape(str(x),quote=True)
+R=Path(__file__).resolve().parent.parent;P=R/'apps/web/public';BASE='https://open-practice.open-practice.workers.dev';E=lambda x:html.escape(str(x),quote=True)
 activities=sorted([json.loads(p.read_text()) for p in (P/'activities').glob('*.json')],key=lambda a:a['number']);A={a['id']:a for a in activities};starter=['bounded-editor','json-data','contrast-check']
 base=(P/'activities.html').read_text();header=base.split('<main>')[0];header=header.replace('<a href="/activities.html" aria-current="page">','<a href="/activities.html">');footer='<footer>'+base.split('<footer>')[1].split('<script')[0];footer=footer.replace('<a href="/tools.html">Tool field desk</a>','<a href="/tools.html">Tool field desk</a><a href="/practice.html">Practice guides</a><a href="/starter.html">Starter challenge</a><a href="/facilitators.html">Facilitator kit</a>')
 
@@ -55,8 +55,8 @@ Count attendance manually without names. Count participants who keep a first art
 ## After the session
 Record: date, host permission, aggregate attendance, first artifacts kept, biggest friction, next improvement and whether a follow-up was invited. No real session is claimed until a host and participants actually run it.
 
-Starter: https://open-practice.zlnew.workers.dev/starter.html?src=facilitator
-Full guides: https://open-practice.zlnew.workers.dev/practice.html
+Starter: https://open-practice.open-practice.workers.dev/starter.html?src=facilitator
+Full guides: https://open-practice.open-practice.workers.dev/practice.html
 Original materials: CC BY 4.0.
 '''
 invitation='''Subject: Would a free 60-minute practical AI taster fit your adult community?
@@ -68,7 +68,7 @@ I run Open Practice, an independent, non-accredited collection of free practical
 Participants use fictional inputs to test an editor, inspect structured data and measure contrast. They keep an artifact and a limitation rather than just watching a presentation. No paid AI plan, account signup, public sharing or mailing-list enrolment is required. Hosted AI availability and limits are disclosed; manual fixtures are available.
 
 The facilitator kit and starter are here:
-https://open-practice.zlnew.workers.dev/facilitators.html
+https://open-practice.open-practice.workers.dev/facilitators.html
 
 If relevant, may we discuss a suitable facilitator, cohort size and date? If not, no follow-up is needed. I will not add you to an automated sequence.
 

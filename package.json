@@ -12,7 +12,7 @@
     "test": "node --test test/*.test.mjs",
     "check": "npm test && node scripts/check-secrets.mjs",
     "deploy": "npx wrangler@latest deploy --config adapters/cloudflare/wrangler.jsonc",
-    "build:assets": "python3 scripts/build-expansion.py && python3 scripts/build-project-extensions.py && python3 scripts/build-curriculum.py && python3 scripts/build-path-covers.py && python3 scripts/build-activities.py && python3 scripts/build-growth.py && python3 scripts/build-expansion-pages.py && python3 scripts/build-site-pages.py && python3 scripts/build-hub.py && node scripts/build-offline-assets.mjs && node scripts/build-inline-assets.mjs",
+    "build:assets": "python3 scripts/build-expansion.py && python3 scripts/build-project-extensions.py && python3 scripts/build-curriculum.py && python3 scripts/build-path-covers.py && python3 scripts/build-activities.py && python3 scripts/build-growth.py && python3 scripts/build-expansion-pages.py && python3 scripts/build-site-pages.py && python3 scripts/build-hub.py && python3 scripts/fix-page-meta.py && node scripts/build-offline-assets.mjs && node scripts/build-inline-assets.mjs",
     "build:curriculum": "python3 scripts/build-expansion.py && python3 scripts/build-project-extensions.py && python3 scripts/build-curriculum.py && python3 scripts/build-path-covers.py && python3 scripts/build-activities.py && python3 scripts/build-growth.py && python3 scripts/build-expansion-pages.py && python3 scripts/build-site-pages.py && python3 scripts/build-hub.py",
     "deploy:fresh": "npx wrangler@latest deploy --config adapters/cloudflare/wrangler.fresh-install.jsonc",
     "build:activities": "python3 scripts/build-activities.py",

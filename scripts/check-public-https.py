@@ -2,7 +2,7 @@
 """Read-only external HTTPS checks. No credentials or third-party dependencies."""
 import argparse, datetime, json, socket, ssl, urllib.request
 
-DEFAULT_HOSTS = ['open-practice.zlnew.workers.dev', 'tapstall.zlnew.workers.dev', 'stpi-deskos.stpi-cloud.workers.dev']
+DEFAULT_HOSTS = ['open-practice.open-practice.workers.dev', 'tapstall.zlnew.workers.dev', 'stpi-deskos.stpi-cloud.workers.dev']
 
 def inspect(host):
     result = {'host': host, 'tls': {}, 'errors': []}

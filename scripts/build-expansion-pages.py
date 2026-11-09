@@ -14,7 +14,7 @@ for c,a in ((c,art[c['expansionIndex']]) for c in new):
 base=(P/'library.html').read_text();head=base.split('<main>')[0];footer='<footer>'+base.split('<footer>',1)[1].split('</footer>',1)[0]+'</footer>';folder=P/'builds';folder.mkdir(exist_ok=True)
 def page(id,title,body):
  h=re.sub(r'<title>.*?</title>','<title>'+e(title)+' · Open Practice</title>',head).replace(' aria-current="page"','')
- h=h.replace('</head>',f'<link rel="canonical" href="https://open-practice.zlnew.workers.dev/builds/{id}.html"></head>')
+ h=h.replace('</head>',f'<link rel="canonical" href="https://open-practice.open-practice.workers.dev/builds/{id}.html"></head>')
  (folder/f'{id}.html').write_text(h+'<main><article class="reading-page">'+body+'</article></main>'+footer+'<script type="module" src="/learner.js"></script><script type="module" src="/growth.js"></script></body></html>')
 for c in courses:
  body=f'<section class="info-hero"><div><div class="eyebrow">PROJECT {c["num"]} / {e(c["track"])}</div><h1>{e(c["title"])}</h1><p>{e(c["description"])}</p><p>{e(c.get("level","Foundation"))} · {e(c["time"])} · {len(c["lessons"])} activities</p><div class="actions"><a class="primary" href="/?course={c["id"]}">Open editable workspace →</a><a href="{c["downloads"]["pack"]}" download>Complete practice pack ↓</a><a href="{c["downloads"]["handbook"]}" download>Handbook ↓</a></div></div><img src="/brand/covers/{c["id"]}.svg?v=illustrated-20261021" width="410" height="520" alt="{e(c["title"])} — illustrated handbook"></section><section><h2>Before you begin</h2><ul>'+''.join('<li>'+e(x)+'</li>' for x in c['prerequisites'])+'</ul><p>Free original, non-accredited practice. Self-review is not independent assessment. No particular provider, payment platform or country is mandatory; use a legitimate available route or explicitly labelled manual practice.</p></section>'
@@ -42,6 +42,6 @@ p=P/'curriculum.html';s=p.read_text().replace('CURRICULUM 2.0','CURRICULUM 3.0')
 p=P/'library.html';s=p.read_text();s=re.sub(r'(<p id="hub-results"[^>]*>)\d+ illustrated resources',lambda x:x[1]+str(m['resources'])+' illustrated resources',s);p.write_text(s)
 p=P/'sitemap.xml';s=p.read_text();urls=['/builds/index.html']+['/builds/'+c['id']+'.html' for c in courses]
 for url in urls:
- if 'https://open-practice.zlnew.workers.dev'+url not in s:s=s.replace('</urlset>','<url><loc>https://open-practice.zlnew.workers.dev'+url+'</loc></url></urlset>')
+ if 'https://open-practice.open-practice.workers.dev'+url not in s:s=s.replace('</urlset>','<url><loc>https://open-practice.open-practice.workers.dev'+url+'</loc></url></urlset>')
 p.write_text(s)
 print(f'Built {len(courses)} readable build paths, directory, regional access guidance and accurate public counts.')

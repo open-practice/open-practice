@@ -2,7 +2,7 @@
 """A clearly labelled static GitHub Pages reading/download fallback, not an account host."""
 from pathlib import Path
 import argparse,re,shutil
-R=Path(__file__).resolve().parent.parent;P=R/'apps/web/public';MAIN='https://open-practice.zlnew.workers.dev'
+R=Path(__file__).resolve().parent.parent;P=R/'apps/web/public';MAIN='https://open-practice.open-practice.workers.dev'
 a=argparse.ArgumentParser();a.add_argument('--output',default='.output/reading-mirror');args=a.parse_args();out=Path(args.output).resolve();base='/open-practice'
 if not out.is_relative_to(R/'.output') or out==R/'.output':raise SystemExit('Output must be a subdirectory of .output')
 if out.exists():shutil.rmtree(out)
