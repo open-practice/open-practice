@@ -535,8 +535,17 @@ def send_mail(to: str, subject: str, html_body: str) -> None:  # patched in test
 
 
 def pub_blogger(item, text):
-    """Our own blog, by Blogger's post-by-email address (one mail to our own blog, not outreach)."""
-    send_mail(env("OP_BLOGGER_EMAIL"), _post(item, "blogger", text)["title"], long_html(item, media(item, "wide")) + "\n#end")
+    """Our own blog, by Blogger's post-by-email address (one mail to our own blog, not outreach).
+
+    The address is the whole rail, so a mistyped domain is silent data loss: Blogger's post-by-email
+    addresses always end in @blogger.com, and a look-alike domain (bloggger.com is a parked one) takes
+    the mail and drops it. Refuse rather than send into a hole.
+    """
+    to = env("OP_BLOGGER_EMAIL")
+    if not to.lower().endswith("@blogger.com"):
+        raise WaitingError(f"OP_BLOGGER_EMAIL {to!r} is not a Blogger post-by-email address "
+                           "(they end in @blogger.com); fix it in the blog settings")
+    send_mail(to, _post(item, "blogger", text)["title"], long_html(item, media(item, "wide")) + "\n#end")
     return "sent to the blog's post-by-email address"
 
 

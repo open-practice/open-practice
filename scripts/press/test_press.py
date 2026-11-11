@@ -188,6 +188,13 @@ class Rails(unittest.TestCase):
         self.assertLessEqual(len(pin["metadata"]["pinterest"]["title"]), 100)
         self.assertTrue(fb["assets"][0]["image"]["metadata"]["altText"])
 
+    def test_blogger_refuses_an_address_that_is_not_bloggers(self):
+        """bloggger.com is a parked domain: mail to it vanishes, so the rail must not send."""
+        item = press.compose(DAY)
+        with with_env(OP_BLOGGER_EMAIL="x.op@bloggger.com", OP_SMTP_USER="u", OP_SMTP_PASS="p"):
+            with self.assertRaises(press.WaitingError):
+                press.pub_blogger(item, "t")
+
     def test_blogger_mails_the_article_to_our_own_blog(self):
         got = []
         item = press.compose(DAY)
